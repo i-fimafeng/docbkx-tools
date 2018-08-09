@@ -1,6 +1,7 @@
 .classpath
 .project
 .idea/
+.settings/
 docbkx-builder-maven-plugin/target/
 target/
 *.iml

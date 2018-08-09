@@ -31,6 +31,8 @@ import java.io.OutputStream;
 import java.io.Reader;
 
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import javax.xml.transform.Result;
 import javax.xml.transform.Source;
@@ -54,7 +56,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.fop.apps.FOPException;
 import org.apache.fop.apps.FOUserAgent;
 import org.apache.fop.apps.Fop;
+import org.apache.fop.apps.FopConfParser;
 import org.apache.fop.apps.FopFactory;
+import org.apache.fop.apps.FopFactoryBuilder;
 import org.apache.fop.apps.MimeConstants;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -101,6 +105,14 @@ public abstract class AbstractFoMojo extends AbstractMojoBase {
    */
   int sourceResolution;
 
+
+  /**
+   * Author name including in PDF metadata.
+   *
+   * @parameter default-value="0"
+   */
+  String author;
+  
   /**
    * Points to the an external FOP configuration file (eg fop.xconf). The use of this
    * parameter will disable the use of maven inline FOP configuration.
@@ -161,10 +173,6 @@ public abstract class AbstractFoMojo extends AbstractMojoBase {
   public void postProcessResult(File result) throws MojoExecutionException {
     super.postProcessResult(result);
 
-    final FopFactory fopFactory = FopFactory.newInstance();
-    final FOUserAgent userAgent = fopFactory.newFOUserAgent();
-    userAgent.setBaseURL(baseUrl);
-
     // FOUserAgent can be used to set PDF metadata
     Configuration configuration = loadFOPConfig();
     InputStream in = null;
@@ -175,9 +183,14 @@ public abstract class AbstractFoMojo extends AbstractMojoBase {
 
       final File outputFile = getOutputFile(result);
       out = openFileForOutput(outputFile);
-      fopFactory.setUserConfig(configuration);
 
-      Fop fop = fopFactory.newFop(getMimeType(), userAgent, out);
+      FopFactoryBuilder builder = new FopFactoryBuilder(new URI(baseUrl)).setConfiguration(configuration);
+      						//building the factory with the user options
+      FopFactory fopFactory = builder.build();
+      final FOUserAgent userAgent = fopFactory.newFOUserAgent();
+      userAgent.setAuthor(author);
+      
+      Fop fop = fopFactory.newFop(getMimeType(), out);
 
       // Setup JAXP using identity transformer
       TransformerFactory factory = TransformerFactory.newInstance();
@@ -198,7 +211,9 @@ public abstract class AbstractFoMojo extends AbstractMojoBase {
       throw new MojoExecutionException("Failed to load JAXP configuration", e);
     } catch (TransformerException e) {
       throw new MojoExecutionException("Failed to transform to " + getTargetFileExtension(), e);
-    } finally {
+    } catch (URISyntaxException e) {
+      throw new MojoExecutionException("Failed to decode baseURL " + baseUrl, e);
+	} finally {
       IOUtils.closeQuietly(out);
       IOUtils.closeQuietly(in);
     }
